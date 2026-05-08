@@ -158,29 +158,47 @@ The block-arg form is recommended for in-code use because closures over outer st
 | `RELINE_DIALOG_TRANSFORM_DEBUG=1` | warn on Translate / Speak / chain-step exceptions instead of swallowing |
 | `RELINE_SPEAK=1` | default-`enabled` proc returns true so `speak` actually speaks |
 
-## Manual TUI verification (Phase 6)
+## TUI verification (Phase 6)
 
-The unit suite exercises the wrap and contents threading deterministically (see `test/rdoc_e2e_test.rb`), but a real TUI demo of "TAB twice on `String#upcase` shows Japanese RDoc" must be done by hand. Reproducer:
+Three layers of evidence:
+
+1. **Unit suite** — `test/rdoc_e2e_test.rb` exercises the wrap-and-thread-contents pipeline deterministically.
+2. **Cross-bundle smoke** — `examples/smoke_translate.rb` runs the full translate pipeline against the real `TranslationMacHelper` when run from a bundle that has `translation_mac-locale` path-loaded.
+3. **Real PTY E2E** — `examples/e2e_irb_pty.rb` spawns an actual `bundle exec irb` under PTY, types a partial Apple SDK identifier, sends TAB twice, and looks for Japanese codepoints in the captured terminal byte stream.
+
+Run the PTY E2E:
 
 ```sh
-# 1. drop a dotfile
-cat > ~/.reline-dialog-transform.rb <<'CONF'
+mkdir -p /tmp/e2e_irb/home
+cat > /tmp/e2e_irb/home/.reline-dialog-transform.rb <<'CONF'
 default_lang :ja
 translate
 CONF
+cat > /tmp/e2e_irb/home/.irbrc <<'IRBRC'
+require "apple_sdk_mac"
+require "apple_sdk_mac/irb"
+AppleSDKMac::IRB.install!
+IRBRC
 
-# 2. ensure the .irbrc loads the gem
-echo 'require "reline/dialog_transform"' >> ~/.irbrc
-
-# 3. start irb
-bundle exec irb
-
-# 4. type `String#upcase` (don't press Enter)
-# 5. press TAB twice
-# 6. observe the right-side popup — the RDoc preview should be Japanese
+cd ../rb-apple-sdk-mac   # bundle with apple_sdk_mac + reline-dialog-transform + translation_mac-locale
+HOME=/tmp/e2e_irb/home \
+  XDG_CACHE_HOME=$HOME/.cache \
+  TERM=xterm-256color \
+  bundle exec ruby ../reline-dialog-transform/examples/e2e_irb_pty.rb \
+    "Apple::Foundation::URL.app"
 ```
 
-For Apple SDK doc translation specifically, install [`apple_sdk_mac-irb`](https://github.com/bash0C7/rb-apple-sdk-mac/tree/main/irb) too and TAB-twice on something like `Apple::Foundation::URL.appendingPathComponent`.
+Expected output:
+
+```
+===== E2E summary =====
+Target identifier: Apple::Foundation::URL.app
+Captured bytes:    ~1900
+Japanese codepoints: 100+ found, sample: パスコンポーネントをURLに追加すると新しいURLが返されます…
+=======================
+```
+
+For a manual hands-on verification (no PTY automation), the same dotfile setup also works against an interactive `bundle exec irb` — type the partial identifier, press TAB twice, observe the right-side popup in Japanese.
 
 ## Architecture
 
