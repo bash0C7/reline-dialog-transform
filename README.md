@@ -119,6 +119,8 @@ end
 
 The transform receives `(text, ctx)` where `ctx` is a Hash with optional `:source`, `:identifier`, `:framework`, `:klass`, `:kind`. Return the transformed (or unchanged) text.
 
+> **Single-line invariant.** Each line of `info.contents` represents one row in the Reline dialog. Custom transforms must return single-line strings — embedded `\n` advances the terminal cursor mid-render and desyncs Reline's `cursor_y` tracking, leaving residual frames from the previous candidate's doc on screen and gaps in the autocomplete column. The built-in `translate` step strips CR/LF for you (Apple Translation framework appends `\n` to every result); custom `use` steps need to be careful not to emit newlines.
+
 ## Project-local override
 
 `load!` resolves a single dotfile: project (CWD) wins over home, only one is loaded. To layer a project-specific override on top of your home defaults, `load` the home file explicitly from the project file:
@@ -169,6 +171,8 @@ Public API:
 | `skip_if:` | nil | proc(text, ctx) → bool to short-circuit per-line. Built-in preset: `Reline::DialogTransform::Translate::SKIP_RDOC_NON_PROSE` skips method signatures, code examples, the IRB show_doc header, and RDoc heading rules — recommended for IRB usage where Apple Translation's ~2s/line cost otherwise dominates the dialog wait |
 | `on_error:` | `:passthrough` | one of `:passthrough` / `:nil` / `:raise` |
 | `translator:` | nil | inject a custom object responding to `#translate(text)` |
+
+`translate` strips CR/LF from the translator output before returning. Apple Translation framework appends `\n` to every result, and an embedded newline inside dialog content desyncs Reline's renderer (mid-row cursor advance → wrong y-position for subsequent rows → residue across candidate navigation).
 
 ### `speak` parameters
 
