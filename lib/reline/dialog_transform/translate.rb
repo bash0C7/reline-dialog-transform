@@ -22,6 +22,7 @@ module Reline
       def call(text, ctx)
         return text if text.nil?
         return text if text.length < @min_length
+        return text if text.include?("\e")
         return text if @skip_if && @skip_if.call(text, ctx)
         return text if @translator.nil?
         translate_with_policy(text)
