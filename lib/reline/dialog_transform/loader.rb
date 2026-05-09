@@ -1,30 +1,21 @@
 # frozen_string_literal: true
 
-require_relative "builder"
-
 module Reline
   module DialogTransform
-    # Discovers `.reline-dialog-transform.rb` files in priority order
-    # (home first, then project) and evaluates each into a single
-    # Builder so the OR-merge slot semantics from spec §4 E apply across
-    # the home/project layering.
+    # Resolves the dotfile path to load. Project (CWD) takes precedence
+    # over home; nil when neither exists. The actual loading is done
+    # by Reline::DialogTransform.load! via Kernel#load — Loader's only
+    # job is path resolution, deliberately decoupled from execution so
+    # tests can verify resolution without spawning Ruby code.
     module Loader
       CONFIG_BASENAME = ".reline-dialog-transform.rb"
 
-      def self.discover(home_dir: Dir.home, project_dir: Dir.pwd)
+      def self.find(home_dir: Dir.home, project_dir: Dir.pwd)
         candidates = [
-          File.join(home_dir, CONFIG_BASENAME),
           File.join(project_dir, CONFIG_BASENAME),
+          File.join(home_dir,    CONFIG_BASENAME),
         ]
-        candidates.uniq.select { |path| File.exist?(path) }
-      end
-
-      def self.build(paths:)
-        builder = Builder.new
-        paths.each do |path|
-          builder.instance_eval(File.read(path), path)
-        end
-        builder
+        candidates.uniq.find { |path| File.exist?(path) }
       end
     end
   end

@@ -18,6 +18,10 @@ require "reline/dialog_transform"
 # dependencies; a Translate transform with a real
 # translation_mac-locale translator would slot in identically.
 #
+# These tests use install! directly (with a FakeReline injected via
+# reline: kwarg) since load! in the new design delegates the reline:
+# wiring to the dotfile body itself (plain-Ruby Kernel#load).
+#
 # Manual verification still owed before v0.1.0:
 # 1. Drop a `~/.reline-dialog-transform.rb` with `translate target_lang: :ja`
 # 2. Run irb (without apple_sdk_mac) and TAB-twice on `String#upcase`
@@ -54,68 +58,57 @@ class RDocE2ETest < Test::Unit::TestCase
   end
 
   def test_rdoc_shape_multi_line_contents_flow_through_dotfile_chain
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, ".reline-dialog-transform.rb")
-      File.write(path, <<~RUBY)
-        use ->(text, _ctx) { text.upcase }
-      RUBY
+    # Shape what IRB's RDoc-driven :show_doc dialog actually emits:
+    # a header line plus prose lines that wrap. The transform must
+    # be applied per-line so any per-line transform (translate,
+    # ANSI-strip, redact) composes naturally.
+    rdoc_info = make_info([
+      "String#upcase",
+      "Returns a copy of str with all lowercase letters replaced",
+      "with their uppercase counterparts.",
+      "",
+      "Example: 'hello'.upcase #=> 'HELLO'",
+    ])
+    existing = make_existing(-> { rdoc_info })
+    fake = FakeReline.new(existing: { show_doc: existing })
 
-      # Shape what IRB's RDoc-driven :show_doc dialog actually emits:
-      # a header line plus prose lines that wrap. The transform must
-      # be applied per-line so any per-line transform (translate,
-      # ANSI-strip, redact) composes naturally.
-      rdoc_info = make_info([
-        "String#upcase",
-        "Returns a copy of str with all lowercase letters replaced",
-        "with their uppercase counterparts.",
-        "",
-        "Example: 'hello'.upcase #=> 'HELLO'",
-      ])
-      existing = make_existing(-> { rdoc_info })
-      fake = FakeReline.new(existing: { show_doc: existing })
-
-      Reline::DialogTransform.load!(reline: fake, paths: [path])
-
-      _name, wrapped, _context = fake.captured_calls.first
-      result = wrapped.call
-
-      assert_equal [
-        "STRING#UPCASE",
-        "RETURNS A COPY OF STR WITH ALL LOWERCASE LETTERS REPLACED",
-        "WITH THEIR UPPERCASE COUNTERPARTS.",
-        "",
-        "EXAMPLE: 'HELLO'.UPCASE #=> 'HELLO'",
-      ], result.contents
+    Reline::DialogTransform.install!(reline: fake) do |t|
+      t.use ->(text, _ctx) { text.upcase }
     end
+
+    _name, wrapped, _context = fake.captured_calls.first
+    result = wrapped.call
+
+    assert_equal [
+      "STRING#UPCASE",
+      "RETURNS A COPY OF STR WITH ALL LOWERCASE LETTERS REPLACED",
+      "WITH THEIR UPPERCASE COUNTERPARTS.",
+      "",
+      "EXAMPLE: 'HELLO'.UPCASE #=> 'HELLO'",
+    ], result.contents
   end
 
   def test_dotfile_can_chain_translate_then_passthrough_speak
     # Translate uses an injected fake translator so we don't depend
     # on translation_mac-locale being installable in this test env.
-    Dir.mktmpdir do |dir|
-      path = File.join(dir, ".reline-dialog-transform.rb")
-      # The dotfile registers an anonymous transform that shapes the
-      # input, simulating Translate's per-line rewrite, plus a Speak-
-      # like passthrough that records the line it would have spoken.
-      spoken = []
-      File.write(path, <<~RUBY)
-        use ->(text, _ctx) { "ja(\#{text})" }
-      RUBY
+    # The dotfile registers an anonymous transform that shapes the
+    # input, simulating Translate's per-line rewrite, plus a Speak-
+    # like passthrough that records the line it would have spoken.
+    rdoc_info = make_info(["String#upcase", "Returns a copy of str."])
+    existing = make_existing(-> { rdoc_info })
+    fake = FakeReline.new(existing: { show_doc: existing })
 
-      rdoc_info = make_info(["String#upcase", "Returns a copy of str."])
-      existing = make_existing(-> { rdoc_info })
-      fake = FakeReline.new(existing: { show_doc: existing })
-
-      Reline::DialogTransform.load!(reline: fake, paths: [path])
-
-      _name, wrapped, _context = fake.captured_calls.first
-      result = wrapped.call
-
-      assert_equal [
-        "ja(String#upcase)",
-        "ja(Returns a copy of str.)",
-      ], result.contents
+    Reline::DialogTransform.install!(reline: fake) do |t|
+      t.use ->(text, _ctx) { "ja(#{text})" }
     end
+
+    _name, wrapped, _context = fake.captured_calls.first
+    result = wrapped.call
+
+    assert_equal [
+      "ja(String#upcase)",
+      "ja(Returns a copy of str.)",
+    ], result.contents
   end
 
   def test_no_dotfile_keeps_apple_chained_proc_contents_intact
@@ -126,7 +119,7 @@ class RDocE2ETest < Test::Unit::TestCase
     existing = make_existing(-> { rdoc_info })
     fake = FakeReline.new(existing: { show_doc: existing })
 
-    Reline::DialogTransform.load!(reline: fake, paths: [])
+    Reline::DialogTransform.install!(reline: fake) { |_t| }
 
     _name, wrapped, _context = fake.captured_calls.first
     result = wrapped.call

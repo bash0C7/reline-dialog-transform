@@ -21,13 +21,20 @@ module Reline
       install_chain(builder.to_chain, dialog: dialog, reline: reline)
     end
 
-    # Public entry point for dotfile-driven configuration. Discovers
-    # `.reline-dialog-transform.rb` in pwd / home (or uses caller-given
-    # `paths:`), evaluates them into a single Builder, and registers.
-    def self.load!(dialog: :show_doc, paths: nil, reline: Reline)
-      paths ||= Loader.discover
-      builder = Loader.build(paths: paths)
-      install_chain(builder.to_chain, dialog: dialog, reline: reline)
+    # Discovers a dotfile (project takes precedence over home, single
+    # match wins) and runs it via Kernel#load. The dotfile body is
+    # plain Ruby and is expected to call Reline::DialogTransform.install!
+    # itself. Returns the path that was loaded, or nil when none.
+    def self.load!(paths: nil)
+      target =
+        if paths
+          paths.find { |path| File.exist?(path) }
+        else
+          Loader.find
+        end
+      return nil unless target
+      load target
+      target
     end
 
     # Wraps whatever dialog_proc is currently registered for `dialog:`,
