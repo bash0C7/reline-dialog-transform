@@ -163,36 +163,27 @@ class InstallTest < Test::Unit::TestCase
 
   # ---- load! integration ----
 
-  def test_load_with_explicit_paths_builds_chain_from_dotfile
+  def test_load_runs_the_dotfile_body_via_kernel_load
     Dir.mktmpdir do |dir|
-      path = File.join(dir, ".reline-dialog-transform.rb")
-      File.write(path, 'use ->(text, _ctx) { text.reverse }')
+      dotfile  = File.join(dir, ".reline-dialog-transform.rb")
+      flag     = File.join(dir, "executed.flag")
+      File.write(dotfile, "File.write(#{flag.inspect}, 'yes')")
 
-      info = make_info(["abc", "def"])
-      existing = make_existing(-> { info })
-      fake = FakeReline.new(existing: { show_doc: existing })
+      result = Reline::DialogTransform.load!(paths: [dotfile])
 
-      Reline::DialogTransform.load!(reline: fake, paths: [path])
-
-      _name, wrapped, _ctx = fake.captured_calls.first
-      result = wrapped.call
-
-      assert_equal ["cba", "fed"], result.contents
+      assert_equal dotfile, result
+      assert(File.exist?(flag), "dotfile body should have run via Kernel#load")
+      assert_equal "yes", File.read(flag)
     end
   end
 
-  def test_load_with_no_dotfiles_still_registers_passthrough_wrap
-    info = make_info(["hello"])
-    existing = make_existing(-> { info })
-    fake = FakeReline.new(existing: { show_doc: existing })
+  def test_load_returns_nil_and_does_not_invoke_anything_when_no_path_exists
+    Dir.mktmpdir do |dir|
+      missing = File.join(dir, ".reline-dialog-transform.rb")
 
-    Reline::DialogTransform.load!(reline: fake, paths: [])
+      result = Reline::DialogTransform.load!(paths: [missing])
 
-    _name, wrapped, _ctx = fake.captured_calls.first
-    result = wrapped.call
-
-    # No transforms, but the wrap still runs and returns the existing
-    # info unchanged so other dialog handling is not regressed.
-    assert_equal ["hello"], result.contents
+      assert_nil result
+    end
   end
 end
