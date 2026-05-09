@@ -45,7 +45,9 @@ module Reline
       private
 
       def translate_with_policy(text)
-        @translator.translate(text)
+        translated = @translator.translate(text)
+        return translated if translated.nil?
+        translated.delete("\r\n")
       rescue StandardError
         case @on_error
         when :raise then raise
