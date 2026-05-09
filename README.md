@@ -69,7 +69,12 @@ The dotfile is plain Ruby that calls `Reline::DialogTransform.install!`. Same DS
 
 ```ruby
 Reline::DialogTransform.install!(default_lang: :ja) do |t|
-  t.translate
+  # SKIP_RDOC_NON_PROSE is recommended for IRB show_doc dialogs:
+  # method signatures, code examples, the IRB header, and RDoc heading
+  # rules bypass the translator. Apple Translation costs ~2s/line and
+  # has no batch API, so cutting non-prose lines roughly thirds the
+  # dialog wait.
+  t.translate skip_if: Reline::DialogTransform::Translate::SKIP_RDOC_NON_PROSE
 end
 ```
 
@@ -161,7 +166,7 @@ Public API:
 | `target_lang:` | builder `default_lang` | BCP-47 string or symbol — the locale to translate to |
 | `source_lang:` | nil (auto-detect) | source locale; usually fine to leave nil |
 | `min_length:` | `2` | shorter lines bypass the translator |
-| `skip_if:` | nil | proc(text, ctx) → bool to short-circuit per-line |
+| `skip_if:` | nil | proc(text, ctx) → bool to short-circuit per-line. Built-in preset: `Reline::DialogTransform::Translate::SKIP_RDOC_NON_PROSE` skips method signatures, code examples, the IRB show_doc header, and RDoc heading rules — recommended for IRB usage where Apple Translation's ~2s/line cost otherwise dominates the dialog wait |
 | `on_error:` | `:passthrough` | one of `:passthrough` / `:nil` / `:raise` |
 | `translator:` | nil | inject a custom object responding to `#translate(text)` |
 
@@ -209,7 +214,7 @@ What the script does:
 
 1. Pre-flights `require "translation_mac/locale"`. Must succeed; otherwise it aborts with copy-pasteable fix-up instructions.
 2. Generates a temporary isolated HOME under `Dir.mktmpdir` and writes two files into it:
-   - `.reline-dialog-transform.rb` — calls `Reline::DialogTransform.install!(default_lang: :ja) { |t| t.translate }` (plus `t.speak voice: "ja-JP"` when `--with-speak` is given)
+   - `.reline-dialog-transform.rb` — calls `Reline::DialogTransform.install!(default_lang: :ja) { |t| t.translate skip_if: Reline::DialogTransform::Translate::SKIP_RDOC_NON_PROSE }` (plus `t.speak voice: "ja-JP"` when `--with-speak` is given)
    - `.irbrc` — single line: `require "reline/dialog_transform"`. Auto-load discovers the dotfile, runs it, and the IRB prepend hook layers the wrap on top of IRB's `:show_doc` after `RelineInputMethod#initialize`.
 3. Prints copy-pasteable instructions: type `"hello".ups` at the prompt, then **TAB once**. IRB's autocomplete shows `upcase` / `upcase!` candidates; the doc preview that appears on the side renders in Japanese (translated by `translation_mac-locale`).
 4. Spawns `bundle exec irb` with `HOME=` pointed at the scratch dir (and `RELINE_SPEAK=1` when `--with-speak`). Your real `~/.irbrc` is never touched.
