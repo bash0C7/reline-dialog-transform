@@ -211,7 +211,7 @@ What the script does:
 2. Generates a temporary isolated HOME under `Dir.mktmpdir` and writes two files into it:
    - `.reline-dialog-transform.rb` — calls `Reline::DialogTransform.install!(default_lang: :ja) { |t| t.translate }` (plus `t.speak voice: "ja-JP"` when `--with-speak` is given)
    - `.irbrc` — single line: `require "reline/dialog_transform"`. Auto-load discovers the dotfile, runs it, and the IRB prepend hook layers the wrap on top of IRB's `:show_doc` after `RelineInputMethod#initialize`.
-3. Prints copy-pasteable instructions: type `String.new.upc` at the prompt, then **TAB once**. IRB's autocomplete shows `upcase` candidates; the doc preview that appears on the side renders in Japanese (translated by `translation_mac-locale`).
+3. Prints copy-pasteable instructions: type `"hello".ups` at the prompt, then **TAB once**. IRB's autocomplete shows `upcase` / `upcase!` candidates; the doc preview that appears on the side renders in Japanese (translated by `translation_mac-locale`).
 4. Spawns `bundle exec irb` with `HOME=` pointed at the scratch dir (and `RELINE_SPEAK=1` when `--with-speak`). Your real `~/.irbrc` is never touched.
 5. After `exit`, cleans up the scratch dir **file by file** with `File.delete` (no `rm -rf`, ever) and finishes with `Dir.rmdir`. If anything unexpected was left behind, `rmdir` refuses and the directory is preserved with a warning.
 
@@ -242,7 +242,7 @@ Wrap registered:   YES — :show_doc points at our wrap (lib/reline/dialog_trans
 =======================
 ```
 
-For hands-on verification, use `quick_start_example.rb` and TAB once on `String.new.upc` (or any stdlib method with RDoc).
+For hands-on verification, use `quick_start_example.rb` and TAB once on `"hello".ups` (or any stdlib method with RDoc).
 
 ## Architecture
 

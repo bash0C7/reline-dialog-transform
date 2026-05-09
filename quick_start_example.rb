@@ -62,7 +62,7 @@ File.write(File.join(scratch, ".irbrc"), <<~IRBRC)
   # active. require "reline/dialog_transform" auto-loads the dotfile in
   # this same HOME and wraps that :show_doc proc.
   require "reline/dialog_transform"
-  $stderr.puts "[quick-start] ready. TAB×2 on a stdlib method should show Japanese."
+  $stderr.puts "[quick-start] ready. TAB on a stdlib method should show Japanese."
 IRBRC
 
 speak_note =
@@ -84,10 +84,11 @@ puts <<~BANNER
       end
 
   ── やってみるコマンド ──
-    1. プロンプトで `String.new.upc` と打つ (Enter は押さん)
-    2. TAB を 1 回押す → IRB が `String#upcase` に補完
-    3. TAB をもう 1 回押す → 右側に doc preview (日本語化された RDoc) が出る
+    1. プロンプトで `"hello".ups` と打つ (Enter は押さん)
+    2. TAB を押す → 補完候補 (upcase / upcase!) が出て、 highlighted 候補
+       に対する show_doc dialog が右側に開く
        例: "すべての小文字が置き換えられた str のコピーを返します..."
+    3. ↓ で別候補に移動するとそのメソッドの doc に切り替わる
     4. `exit` で終了 → quick-start が temp HOME を個別 rm + rmdir
 
   ── speak 切り替え ──
