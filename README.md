@@ -160,25 +160,27 @@ The block-arg form is recommended for in-code use because closures over outer st
 
 ## Try it: `quick_start_example.rb`
 
-The single canonical example. Lives at the gem root so you can run it the moment you `cd` in:
+The single canonical example. Lives at the gem root so you can run it the moment you `cd` in.
+
+> **Run it from a bundle that has `apple_sdk_mac` + `translation_mac-locale` path-loaded.** The `rb-apple-sdk-mac` development bundle is the canonical one. The script pre-flights both gems and aborts with copy-pasteable instructions if either is missing — running from this gem's own bundle is intentionally rejected because there's no Apple SDK doc source for the dialog to render.
 
 ```sh
-bundle exec ruby quick_start_example.rb
+cd ../rb-apple-sdk-mac
+bundle exec ruby ../reline-dialog-transform/quick_start_example.rb              # translate-only
+bundle exec ruby ../reline-dialog-transform/quick_start_example.rb --with-speak # also speaks via AVSpeechSynthesizer
 ```
 
 What it does:
 
-1. Generates a temporary isolated HOME directory under `Dir.mktmpdir` and writes two files into it:
-   - `.reline-dialog-transform.rb` — `default_lang :ja` + `translate` (and a commented-out `speak` line you can uncomment)
-   - `.irbrc` — requires `apple_sdk_mac/irb` (when present) plus `reline/dialog_transform`
-2. Prints copy-pasteable instructions for what to type at the irb prompt to see translation in action — e.g. `Apple::Foundation::URL.app` then TAB twice.
-3. Pauses on `Press Enter to launch irb...` so you have time to read.
-4. Spawns `bundle exec irb` with `HOME=` pointed at the scratch dir. Your real `~/.irbrc` is never touched.
+1. Pre-flights `require "apple_sdk_mac"` and `require "translation_mac/locale"`. Both must succeed.
+2. Generates a temporary isolated HOME under `Dir.mktmpdir` and writes two files into it:
+   - `.reline-dialog-transform.rb` — `default_lang :ja` + `translate` (plus `speak voice: "ja-JP"` when `--with-speak` is given)
+   - `.irbrc` — requires `apple_sdk_mac/irb` and calls `AppleSDKMac::IRB.install!`
+3. Prints copy-pasteable instructions for what to type at the prompt — `Apple::Foundation::URL.app` then **TAB twice**.
+4. Spawns `bundle exec irb` with `HOME=` pointed at the scratch dir (and `RELINE_SPEAK=1` when `--with-speak`). Your real `~/.irbrc` is never touched. There is no "Press Enter to launch" pause — irb starts immediately.
 5. After `exit`, cleans up the scratch dir **file by file** with `File.delete` (no `rm -rf`, ever) and finishes with `Dir.rmdir`. If anything unexpected was left behind, `rmdir` refuses and the directory is preserved with a warning so nothing arbitrary gets wiped.
 
-When run from a bundle that has `apple_sdk_mac` + `translation_mac-locale` path-loaded (e.g. the `rb-apple-sdk-mac` development bundle), you get the full Apple SDK doc → Japanese demo. When run from this gem's own bundle, the wrap still installs and runs, the `translate` transform just passes through (no translator engine in scope) — useful for quickly sanity-checking a fresh `bundle install`.
-
-> The other scripts under `test/` (`smoke_translate.rb`, `e2e_irb_pty.rb`) are verification tooling, not user examples. See [TUI verification](#tui-verification-phase-6) below.
+> The scripts under `test/` (`smoke_translate.rb`, `e2e_irb_pty.rb`) are verification tooling, not user examples. See [TUI verification](#tui-verification-phase-6) below.
 
 ## TUI verification (Phase 6)
 
