@@ -7,6 +7,20 @@ module Reline
     # injected (tests, custom providers) or auto-built from target_lang
     # via translation_mac-locale (soft-loaded; LoadError → identity).
     class Translate
+      # Built-in skip_if preset for IRB show_doc dialog content. Skips
+      # the obviously non-prose lines so the slow per-line Apple
+      # Translation calls (~2s/line, no batch API, parallel speedup is
+      # only 1.43x and unreliable) only run on actual paragraphs.
+      #
+      # Usage: t.translate skip_if: Translate::SKIP_RDOC_NON_PROSE
+      SKIP_RDOC_NON_PROSE = lambda do |line, _ctx|
+        return true if line.start_with?("Press Alt+")               # IRB header
+        return true if line.start_with?("===")                       # RDoc heading rule
+        return true if line =~ /\A[a-zA-Z_]\w*[!?]?(?:\(.*\))? -> /  # method signature
+        return true if line.start_with?(" ", "\t")                   # indented code/example
+        false
+      end
+
       attr_reader :target_lang, :source_lang
 
       def initialize(target_lang: nil, source_lang: nil, min_length: 2,
