@@ -145,6 +145,54 @@ class TranslateTest < Test::Unit::TestCase
     assert_equal ["Returns the receiver"], fake.calls
   end
 
+  # ---- SKIP_RDOC_NON_PROSE preset ----
+  #
+  # IRB show_doc dialog content includes mixed line types. Translating
+  # everything is slow (Apple Translation: ~2s per line, no batch API)
+  # AND quality-poor on code (method signatures get capitalized weirdly,
+  # code examples lose semantics). This preset skip_if proc keeps the
+  # fast path for clearly non-prose lines so only paragraphs translate.
+
+  def skip
+    Reline::DialogTransform::Translate::SKIP_RDOC_NON_PROSE
+  end
+
+  def assert_skipped(line)
+    assert_true skip.call(line, {}), "expected SKIP_RDOC_NON_PROSE to skip #{line.inspect}"
+  end
+
+  def assert_translated(line)
+    assert_false skip.call(line, {}), "expected SKIP_RDOC_NON_PROSE to translate #{line.inspect}"
+  end
+
+  def test_smart_skip_skips_irb_alt_d_header
+    assert_skipped "Press Alt+d to read the full doc"
+  end
+
+  def test_smart_skip_skips_method_signature
+    assert_skipped "upcase(mapping = :ascii) -> new_str"
+  end
+
+  def test_smart_skip_skips_method_signature_no_args
+    assert_skipped "size -> integer"
+  end
+
+  def test_smart_skip_skips_indented_code_example
+    assert_skipped %q(  "hEllO".upcase  #=> "HELLO")
+  end
+
+  def test_smart_skip_skips_rdoc_heading_rule
+    assert_skipped "=== upcase"
+  end
+
+  def test_smart_skip_translates_prose_paragraph
+    assert_translated "Returns a string containing the upcased characters in str."
+  end
+
+  def test_smart_skip_translates_attribution_line
+    assert_translated "(from ruby core)"
+  end
+
   # ---- regression: Phase 1 attrs still expose target_lang / source_lang ----
 
   def test_phase1_target_lang_attr_still_readable
