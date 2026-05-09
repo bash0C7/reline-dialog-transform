@@ -61,8 +61,9 @@ puts
 Dir.mktmpdir do |dir|
   path = File.join(dir, ".reline-dialog-transform.rb")
   File.write(path, <<~CONF)
-    default_lang #{target_lang.to_sym.inspect}
-    translate
+    Reline::DialogTransform.install!(default_lang: #{target_lang.to_sym.inspect}) do |t|
+      t.translate
+    end
   CONF
 
   Reline::DialogTransform.load!(paths: [path])

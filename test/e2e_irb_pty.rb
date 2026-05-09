@@ -13,13 +13,18 @@
 #
 #   mkdir -p /tmp/e2e_irb/home
 #   cat > /tmp/e2e_irb/home/.reline-dialog-transform.rb <<'CONF'
-#     default_lang :ja
-#     translate
+#     Reline::DialogTransform.install!(default_lang: :ja) do |t|
+#       t.translate
+#     end
 #   CONF
 #   cat > /tmp/e2e_irb/home/.irbrc <<'IRBRC'
 #     require "apple_sdk_mac"
 #     require "apple_sdk_mac/irb"
 #     AppleSDKMac::IRB.install!
+#     # NOTE: requires explicit load! call AFTER Reline's input method
+#     # is created (i.e. apple_sdk_mac/irb's chained proc is registered)
+#     # for the wrap to layer on top. Cross-repo integration is currently
+#     # left to the user's .irbrc.
 #   IRBRC
 #
 # Then run from a bundle that has apple_sdk_mac + reline-dialog-
