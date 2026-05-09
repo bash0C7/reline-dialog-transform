@@ -21,10 +21,20 @@ module Reline
       install_chain(builder.to_chain, dialog: dialog, reline: reline)
     end
 
-    # Discovers a dotfile (project takes precedence over home, single
-    # match wins) and runs it via Kernel#load. The dotfile body is
-    # plain Ruby and is expected to call Reline::DialogTransform.install!
-    # itself. Returns the path that was loaded, or nil when none.
+    # Discovers a dotfile and runs it via Kernel#load. The dotfile body
+    # is plain Ruby and is expected to call Reline::DialogTransform.install!
+    # itself.
+    #
+    # Selection rules:
+    #   - Default (paths: nil): Loader.find is used. Project (CWD) takes
+    #     precedence over home; only one file is loaded; nil if neither
+    #     dotfile exists.
+    #   - Explicit paths: array is searched in caller-supplied order
+    #     (Array#find). The first existing path is loaded. The caller
+    #     is responsible for ordering — there is no automatic project-
+    #     before-home reordering when paths is given.
+    #
+    # Returns the loaded path, or nil when none of the candidates exist.
     def self.load!(paths: nil)
       target =
         if paths
