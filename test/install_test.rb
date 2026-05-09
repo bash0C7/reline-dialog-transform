@@ -26,6 +26,7 @@ class InstallTest < Test::Unit::TestCase
 
     def add_dialog_proc(name, proc, context)
       @captured_calls << [name, proc, context]
+      @existing[name] = Reline::Core::DialogProc.new(proc, context)
     end
 
     def dialog_proc(name)
@@ -76,7 +77,12 @@ class InstallTest < Test::Unit::TestCase
     assert_kind_of Reline::DialogTransform::Builder, seen
   end
 
-  def test_install_called_twice_each_call_creates_independent_registration
+  def test_install_called_twice_layers_second_wrap_on_top_of_first
+    # install! captures whatever is currently registered for `dialog:`
+    # at the moment of call. Calling install! twice consecutively means
+    # the second wrap captures the first wrap as its existing_proc, so
+    # both chains run in registration order (same mechanism that lets
+    # reinstall! layer on top of IRB's :show_doc).
     fresh_info = -> {
       Reline::DialogRenderInfo.new(
         pos: Reline::CursorPos.new(0, 0),
@@ -99,8 +105,10 @@ class InstallTest < Test::Unit::TestCase
     first_wrapped = fake.captured_calls[0][1]
     assert_equal ["ABC"], first_wrapped.call.contents
 
+    # Second wrap runs first wrap (upcase) then its own chain (reverse):
+    # "abc" → upcase → "ABC" → reverse → "CBA"
     second_wrapped = fake.captured_calls[1][1]
-    assert_equal ["cba"], second_wrapped.call.contents
+    assert_equal ["CBA"], second_wrapped.call.contents
   end
 
   def test_default_lang_propagates_into_builder_for_translate_call
@@ -159,6 +167,40 @@ class InstallTest < Test::Unit::TestCase
     result = wrapped.call
 
     assert_equal ["unchanged"], result.contents
+  end
+
+  # ---- reinstall! for late-registered :show_doc (e.g., IRB) ----
+
+  def test_reinstall_layers_on_top_of_externally_overwritten_show_doc
+    # Simulates IRB::RelineInputMethod#initialize registering its own
+    # :show_doc proc AFTER our wrap was installed at .irbrc time.
+    # reinstall! must re-apply the last install! chain on top of the
+    # newly registered proc.
+    fake = FakeReline.new
+
+    Reline::DialogTransform.install!(reline: fake) do |t|
+      t.use ->(text, _) { text.upcase }
+    end
+
+    info = make_info(["external"])
+    external = -> { info }
+    fake.add_dialog_proc(:show_doc, external, Reline::DEFAULT_DIALOG_CONTEXT)
+
+    Reline::DialogTransform.reinstall!
+
+    latest = fake.captured_calls.last[1]
+    result = latest.call
+
+    assert_equal ["EXTERNAL"], result.contents
+  end
+
+  def test_reinstall_is_a_noop_when_install_was_never_called
+    fake = FakeReline.new
+    Reline::DialogTransform.send(:reset_last_install!)
+
+    Reline::DialogTransform.reinstall!(reline: fake)
+
+    assert_empty fake.captured_calls
   end
 
   # ---- load! integration ----
