@@ -151,7 +151,7 @@ def self.install!(dialog: :show_doc, default_lang: nil, &block)
   chain
 end
 
-def self.load!(dialog: :show_doc, paths: nil)
+def self.load!(paths: nil)
   candidates = paths || default_dotfile_paths
   target = candidates.find { |p| File.exist?(p) }
   return nil unless target
@@ -161,7 +161,7 @@ end
 ```
 
 - `install!` は dialog kwarg と default_lang kwarg のみ。 ブロックは Builder を yield。
-- `load!` は片方しか load しない。 戻り値は load した path (テスト容易性のため)。
+- `load!` は片方しか load しない。 戻り値は load した path (テスト容易性のため)。 `dialog:` kwarg は持たない (dialog 名は dotfile 内の install! 呼びで指定する)。
 
 ### 3.3 `lib/reline/dialog_transform/loader.rb`
 
