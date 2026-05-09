@@ -112,6 +112,39 @@ class TranslateTest < Test::Unit::TestCase
     assert_empty fake.calls
   end
 
+  # ---- ANSI-escape guard ----
+  #
+  # Apple's Translation framework strips C0 control bytes (0x1b ESC)
+  # from input. When Reline hands us a syntax-highlighted line like
+  # "\e[1;32mString.upcase\e[m", translating it returns
+  # "[1;32mString.upcase[m" — the ANSI codes are now naked literals
+  # that render as "[1;32m..." in the dialog. Skip translation for
+  # any text that contains an ESC byte to preserve Reline's styling.
+
+  def test_call_skips_text_containing_ansi_escape
+    fake = FakeTranslator.new
+    t = Translate.new(target_lang: :ja, translator: fake)
+    styled = "\e[1;32mString.upcase\e[m"
+    assert_equal styled, t.call(styled, {})
+    assert_empty fake.calls
+  end
+
+  def test_call_skips_text_with_ansi_embedded_mid_line
+    fake = FakeTranslator.new
+    t = Translate.new(target_lang: :ja, translator: fake)
+    styled = "Returns \e[1;32mString.upcase\e[m method"
+    assert_equal styled, t.call(styled, {})
+    assert_empty fake.calls
+  end
+
+  def test_call_translates_plain_text_without_ansi
+    # Sanity: ANSI guard must not regress the normal path.
+    fake = FakeTranslator.new
+    t = Translate.new(target_lang: :ja, translator: fake)
+    assert_equal "T(Returns the receiver)", t.call("Returns the receiver", {})
+    assert_equal ["Returns the receiver"], fake.calls
+  end
+
   # ---- regression: Phase 1 attrs still expose target_lang / source_lang ----
 
   def test_phase1_target_lang_attr_still_readable
