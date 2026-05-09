@@ -185,7 +185,9 @@ end
 
 `Reline::DialogTransform.load!` を呼ぶ前提は変わらないので互換維持。 ただし sibling リポジトリの dotfile 例を README に書いている場合は新 DSL 形式への更新を別途指示する (本リポジトリ範囲外)。
 
-## 4. README リポジショニング (T1, T2, T3 統合)
+## 4. README 書き換え方針 (T1, T2, T3 統合)
+
+**README には最新の状態のみ記載する。 過去言及・変更説明・transitional preamble (`Until v0.1.0...` 等) は不要。**
 
 ### 4.1 L5 サマリ削除 (T2)
 
@@ -195,7 +197,7 @@ so the same hook can wrap RDoc, Apple SDK doc, or any other dialog source.
 **Status: pre-1.0 (`v0.0.1` development).**
 ```
 
-→ 削除。 出自情報と pre-1.0 ステータス表記は不要。
+→ 削除。 出自情報・status 表記は不要。
 
 ### 4.2 Installation を git: source 直参照に書き換え (T1)
 
@@ -205,10 +207,9 @@ so the same hook can wrap RDoc, Apple SDK doc, or any other dialog source.
 gem "reline-dialog-transform"
 ```
 
-→ 以下に置換:
+→ 以下に置換 (preamble なし、 最新の事実のみ):
 
 ```ruby
-# Until v0.1.0 publishes to rubygems, install from GitHub directly:
 gem "reline-dialog-transform",
   git: "https://github.com/bash0C7/reline-dialog-transform"
 ```
@@ -221,47 +222,40 @@ gem "translation_mac-locale",
   git:  "https://github.com/bash0C7/rb-translation-mac",
   glob: "locale/translation_mac-locale.gemspec"
 
-# Optional: enable the `speak` built-in transform
-# NOTE: rb-apple-sdk-mac currently fails to install via git: source because its
-# extconf.rb requires "swift_gem/mkmf" which is not resolvable from bundler's
-# native-extension build subprocess. Until upstream fixes the resolution, use
-# the ghq + path: workaround:
+# Optional: enable the `speak` built-in transform.
+# rb-apple-sdk-mac's extconf.rb requires `swift_gem/mkmf` which is not
+# resolvable from bundler's native-extension build subprocess, so install
+# via ghq + path: instead of git: source:
 #
 #   ghq get https://github.com/bash0C7/rb-apple-sdk-mac
 #   # then in your Gemfile:
-#   gem "rb-apple-sdk-mac", path: "/path/to/ghq/root/github.com/bash0C7/rb-apple-sdk-mac"
 gem "rb-apple-sdk-mac",
-  git: "https://github.com/bash0C7/rb-apple-sdk-mac"
+  path: "/path/to/ghq/root/github.com/bash0C7/rb-apple-sdk-mac"
 ```
 
 ### 4.3 トーンを「translate/speak = built-in 参考実装」 にリポジショニング (T3)
 
 - "What it does" セクション (現 L7-14) のリード文を **「Reline `:show_doc` dialog の `DialogRenderInfo#contents` を transform chain で加工する汎用基盤」** に書き換え
-- translate / speak は **「Reference transforms (shipped as built-in examples)」** セクションに格下げ
+- 「extract から始まった」 等の出自言及は一切なし
+- translate / speak は **「Reference transforms (built-in examples)」** セクションに格下げ
 - ユーザ拡張ポイント `t.use ->(text, ctx) { ... }` を冒頭近くに昇格
 
 ### 4.4 dotfile 例を新 DSL に置換
 
-現状の README に以下のような instance_eval bare method 例があるが全部 install! 形式に書き換え:
+現状の README の instance_eval bare method 例を全部 install! block-arg 形式に書き換え:
 
 ```ruby
-# 旧 (instance_eval bare)
-default_lang :ja
-translate
-speak voice: "ja-JP"
-```
-
-→
-
-```ruby
-# 新 (block-arg install!)
 Reline::DialogTransform.install!(default_lang: :ja) do |t|
   t.translate
   t.speak voice: "ja-JP"
 end
 ```
 
-`clear!` の項 (現 L99-105) は削除。 「project が home を継承したいときは `load File.expand_path(...)` を明示」 という新ルールに差し替え。
+`clear!` 言及 (現 L99-105) は削除。 「project が home を継承したいときは `load File.expand_path(...)` を明示」 という運用法に差し替え。
+
+### 4.5 `quick_start_example.rb` 内の dotfile 生成コードも新 DSL に追従 (T3 範囲)
+
+`quick_start_example.rb:53-60` の `dotfile_body` および `:82-87` の README 風プロンプト出力部を新 DSL 形式に書き換える。
 
 ## 5. Phase plan (TDD コミット境界規律で進行)
 
