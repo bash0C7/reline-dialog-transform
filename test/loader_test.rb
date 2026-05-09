@@ -57,7 +57,7 @@ class LoaderTest < Test::Unit::TestCase
     end
   end
 
-  def test_find_handles_home_equals_project_dir
+  def test_find_returns_single_path_when_home_and_project_are_same_dir
     with_tmpdirs do |h, _p|
       same = write_config(h)
       # User running irb from $HOME — should still resolve to the one file.

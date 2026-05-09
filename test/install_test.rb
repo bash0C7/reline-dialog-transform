@@ -177,7 +177,7 @@ class InstallTest < Test::Unit::TestCase
     end
   end
 
-  def test_load_returns_nil_and_does_not_invoke_anything_when_no_path_exists
+  def test_load_returns_nil_when_no_path_exists
     Dir.mktmpdir do |dir|
       missing = File.join(dir, ".reline-dialog-transform.rb")
 
