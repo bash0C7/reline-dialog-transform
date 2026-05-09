@@ -16,8 +16,7 @@ module Reline
     # `reline:` is the Reline gateway for dependency injection — tests
     # pass a FakeReline; production picks up the real Reline module.
     def self.install!(dialog: :show_doc, default_lang: nil, reline: Reline)
-      builder = Builder.new
-      builder.default_lang(default_lang) if default_lang
+      builder = Builder.new(default_lang: default_lang)
       yield builder if block_given?
       install_chain(builder.to_chain, dialog: dialog, reline: reline)
     end
