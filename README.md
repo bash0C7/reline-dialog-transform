@@ -158,6 +158,21 @@ The block-arg form is recommended for in-code use because closures over outer st
 | `RELINE_DIALOG_TRANSFORM_DEBUG=1` | warn on Translate / Speak / chain-step exceptions instead of swallowing |
 | `RELINE_SPEAK=1` | default-`enabled` proc returns true so `speak` actually speaks |
 
+## Try it interactively (`examples/quick_start.rb`)
+
+```sh
+bundle exec ruby examples/quick_start.rb
+```
+
+The script:
+
+1. Generates a temp HOME with `.reline-dialog-transform.rb` and `.irbrc` configured for `default_lang :ja` + `translate`.
+2. Prints what to type at the irb prompt to see translation in action.
+3. Spawns `bundle exec irb` against that temp HOME (your real `~/.irbrc` is never touched).
+4. Cleans up the temp HOME on exit.
+
+When run from a bundle that has `apple_sdk_mac` + `translation_mac-locale` path-loaded (e.g. `rb-apple-sdk-mac`), you get the full Apple SDK doc → Japanese demo. When run from this gem's own bundle, the wrap still installs and runs, the `translate` transform just passes through (no translator engine in scope).
+
 ## TUI verification (Phase 6)
 
 Three layers of evidence:
