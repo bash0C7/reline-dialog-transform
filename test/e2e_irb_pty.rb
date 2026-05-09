@@ -1,55 +1,36 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 #
-# Phase 6 real-TUI E2E driver.
+# Self-contained PTY E2E driver — proves reline-dialog-transform's
+# wrap survives IRB's RelineInputMethod#initialize. That initializer
+# calls Reline.add_dialog_proc(:show_doc, ...), which would overwrite
+# any :show_doc wrap registered during .irbrc evaluation. The library
+# prepends a hook that calls reinstall! after super, so our wrap
+# layers on top of IRB's. This driver verifies the prepend works in
+# a real interactive irb session under a TTY (PTY) — the only place
+# RelineInputMethod#initialize actually runs.
 #
-# Spawns `bundle exec irb` under a PTY, types a partial Apple SDK
-# identifier, sends TAB twice to trigger the autocomplete + show_doc
-# dialog, captures the raw terminal byte stream, and reports any
-# Japanese codepoints found (i.e. the wrap actually translated the
-# Apple SDK doc through translation_mac-locale).
+# Method: spawn `bundle exec irb` under PTY, wait for prompt, evaluate
+# a Ruby expression that prints `Reline.dialog_proc(:show_doc).
+# dialog_proc.source_location[0]`, parse the output and assert the
+# path points at lib/reline/dialog_transform.rb (our wrap), not at
+# irb/input-method.rb (IRB's raw show_doc proc).
 #
-# Setup an isolated HOME so the user's real ~/.irbrc is untouched:
+# Usage (from this gem's bundle):
 #
-#   mkdir -p /tmp/e2e_irb/home
-#   cat > /tmp/e2e_irb/home/.reline-dialog-transform.rb <<'CONF'
-#     Reline::DialogTransform.install!(default_lang: :ja) do |t|
-#       t.translate
-#     end
-#   CONF
-#   cat > /tmp/e2e_irb/home/.irbrc <<'IRBRC'
-#     require "apple_sdk_mac"
-#     require "apple_sdk_mac/irb"
-#     AppleSDKMac::IRB.install!
-#     # NOTE: requires explicit load! call AFTER Reline's input method
-#     # is created (i.e. apple_sdk_mac/irb's chained proc is registered)
-#     # for the wrap to layer on top. Cross-repo integration is currently
-#     # left to the user's .irbrc.
-#   IRBRC
+#   bundle exec ruby test/e2e_irb_pty.rb
 #
-# Then run from a bundle that has apple_sdk_mac + reline-dialog-
-# transform + translation_mac-locale all path-loaded (e.g.
-# rb-apple-sdk-mac):
-#
-#   cd /Users/you/dev/src/github.com/bash0C7/rb-apple-sdk-mac
-#   HOME=/tmp/e2e_irb/home \
-#   XDG_CACHE_HOME=/Users/you/.cache \
-#   TERM=xterm-256color \
-#   bundle exec ruby ../reline-dialog-transform/test/e2e_irb_pty.rb \
-#     "Apple::Foundation::URL.app"
-#
-# XDG_CACHE_HOME points at the real apple_sdk_mac KB cache so the
-# isolated HOME doesn't strand the autocomplete with an empty KB.
-#
-# Exit code: 0 on Japanese detected, 1 on capture without any
-# Japanese codepoints (suggests translation didn't run end-to-end).
+# Exit: 0 on dialog_proc(:show_doc) pointing at our wrap, 1 otherwise.
 
 require "pty"
 require "io/console"
+require "tmpdir"
+require "fileutils"
 require "timeout"
 
-LOG_PATH = ENV.fetch("E2E_IRB_LOG", "/tmp/e2e_irb/output.bin")
-TARGET   = ARGV[0] || "Apple::Foundation::URL.app"
+LOG_PATH         = ENV.fetch("E2E_IRB_LOG", "/tmp/e2e_irb/output.bin")
+EXPECTED_PATH_RE = %r{lib/reline/dialog_transform\.rb}
+PROBE_LINE       = 'puts %|<<SHOWDOC=#{Reline.dialog_proc(:show_doc).dialog_proc.source_location.inspect}>>|'
 
 def drain(reader, into:, max_seconds: 0.6)
   deadline = Time.now + max_seconds
@@ -81,65 +62,83 @@ def wait_for(reader, into:, pattern:, timeout: 30)
   false
 end
 
-require "fileutils"
 FileUtils.mkdir_p(File.dirname(LOG_PATH))
 
-PTY.spawn("bundle exec irb") do |reader, writer, pid|
-  buffer = String.new(encoding: "ASCII-8BIT")
+scratch = Dir.mktmpdir("reline-dialog-transform-e2e-")
 
-  # IRB 1.18 + Ruby 4 prompt is `irb(main):001> `; older toolchains
-  # rendered `irb(main):001:0> `. Match both.
-  unless wait_for(reader, into: buffer, pattern: /irb\(main\):\d+(:\d+)?>/, timeout: 90)
+File.write(File.join(scratch, ".reline-dialog-transform.rb"), <<~CONF)
+  Reline::DialogTransform.install! do |t|
+    t.use ->(text, _ctx) { text.upcase }
+  end
+CONF
+
+File.write(File.join(scratch, ".irbrc"), <<~IRBRC)
+  require "reline/dialog_transform"
+IRBRC
+
+env = {
+  "HOME" => scratch,
+  "TERM" => ENV["TERM"] || "xterm-256color",
+}
+
+begin
+  PTY.spawn(env, "bundle", "exec", "irb") do |reader, writer, pid|
+    buffer = String.new(encoding: "ASCII-8BIT")
+
+    unless wait_for(reader, into: buffer, pattern: /irb\(main\):\d+(:\d+)?>/, timeout: 90)
+      File.binwrite(LOG_PATH, buffer)
+      Process.kill(:TERM, pid) rescue nil
+      Process.wait(pid) rescue nil
+      abort "TIMEOUT waiting for first prompt (captured #{buffer.bytesize} bytes)"
+    end
+
+    drain(reader, into: buffer, max_seconds: 0.5)
+
+    writer.write(PROBE_LINE + "\n")
+    writer.flush
+    drain(reader, into: buffer, max_seconds: 2.0)
+
+    writer.write("exit\n")
+    drain(reader, into: buffer, max_seconds: 1.5)
+
+    begin
+      Timeout.timeout(5) { Process.wait(pid) }
+    rescue Timeout::Error
+      Process.kill(:KILL, pid) rescue nil
+    end
+
     File.binwrite(LOG_PATH, buffer)
-    Process.kill(:TERM, pid) rescue nil
-    Process.wait(pid) rescue nil
-    abort "TIMEOUT waiting for first prompt (captured #{buffer.bytesize} bytes)"
   end
-
-  drain(reader, into: buffer, max_seconds: 0.5)
-
-  writer.write(TARGET)
-  writer.flush
-  drain(reader, into: buffer, max_seconds: 0.5)
-
-  writer.write("\t")
-  writer.flush
-  drain(reader, into: buffer, max_seconds: 1.5)
-
-  writer.write("\t")
-  writer.flush
-  # First-call latency on translation_mac-locale's helper warm-up
-  # plus apple_sdk_mac's KB lookup can take a few seconds.
-  drain(reader, into: buffer, max_seconds: 8.0)
-
-  writer.write("\x03")
-  drain(reader, into: buffer, max_seconds: 0.4)
-  writer.write("exit\n")
-  drain(reader, into: buffer, max_seconds: 1.0)
-
-  begin
-    Timeout.timeout(5) { Process.wait(pid) }
-  rescue Timeout::Error
-    Process.kill(:KILL, pid) rescue nil
+ensure
+  %w[.reline-dialog-transform.rb .irbrc .irb_history .irb-cache .reline_history].each do |name|
+    path = File.join(scratch, name)
+    File.delete(path) if File.exist?(path)
   end
-
-  File.binwrite(LOG_PATH, buffer)
+  Dir.rmdir(scratch) rescue nil
 end
 
-raw = File.binread(LOG_PATH).force_encoding("UTF-8")
-clean = raw.encode("UTF-8", invalid: :replace, undef: :replace, replace: "?")
+raw     = File.binread(LOG_PATH).force_encoding("UTF-8")
+clean   = raw.encode("UTF-8", invalid: :replace, undef: :replace, replace: "?")
 no_ansi = clean.gsub(/\e\[[0-9;?]*[A-Za-z]/, "").gsub(/\e\][^\a]*\a/, "")
 
-ja_chars = no_ansi.scan(/[぀-ゟ゠-ヿ一-鿿]/)
+# Match the evaluated output line (`<<SHOWDOC=["path", lineno]>>`),
+# not the echoed input where the embedded `#{...}` is still literal.
+probe_match = no_ansi.match(/<<SHOWDOC=\["([^"]+)",\s*(\d+)\]>>/)
+detected_at = probe_match ? "#{probe_match[1]}:#{probe_match[2]}" : nil
+matches     = detected_at && detected_at.match?(EXPECTED_PATH_RE)
 
 puts "===== E2E summary ====="
-puts "Target identifier: #{TARGET}"
 puts "Captured bytes:    #{raw.bytesize}"
-if ja_chars.empty?
-  puts "Japanese codepoints: NO (translation pipeline likely passthrough)"
+if probe_match
+  puts "Probe captured:    #{detected_at}"
+  if matches
+    puts "Wrap registered:   YES — :show_doc points at our wrap (lib/reline/dialog_transform.rb)"
+  else
+    puts "Wrap registered:   NO — :show_doc was set by something else after our reinstall!"
+  end
 else
-  puts "Japanese codepoints: #{ja_chars.size} found, sample: #{ja_chars.first(40).join}"
+  puts "Probe captured:    (no <<SHOWDOC=...>> sentinel found)"
 end
 puts "Raw stream saved to: #{LOG_PATH}"
 puts "======================="
-exit(ja_chars.empty? ? 1 : 0)
+exit(matches ? 0 : 1)
