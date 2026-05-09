@@ -4,12 +4,17 @@ Compose Reline dialog text transforms — `translate`, `speak`, and arbitrary us
 
 ## What it does
 
-When you press TAB twice in IRB, Reline pops a doc dialog on the right side of the autocomplete popup. This gem hooks `Reline.add_dialog_proc(:show_doc, ...)` and routes every line of the dialog's `DialogRenderInfo#contents` through an ordered chain of transforms. Two transforms ship in the box:
+This gem wraps `Reline.add_dialog_proc(:show_doc, ...)` and routes every line of the dialog's `DialogRenderInfo#contents` through an ordered chain of transforms. A transform is anything callable as `(text, ctx) → text`, so the chain is whatever you compose.
 
-- **`translate`** — runs each line through [`translation_mac-locale`](https://github.com/bash0C7/rb-translation-mac) (soft-loaded). Converts English RDoc / Apple SDK doc into your locale.
-- **`speak`** — passthrough transform whose side effect is reading the line aloud via `AVSpeechSynthesizer` (soft-loaded through [`apple_sdk_mac`](https://github.com/bash0C7/rb-apple-sdk-mac)). Joke tier; opt-in via `RELINE_SPEAK=1`.
+The simplest transform is a Proc you pass via `t.use`:
 
-Anything callable can be added to the chain via `use ->(text, ctx) { ... }`.
+```ruby
+Reline::DialogTransform.install! do |t|
+  t.use ->(text, _ctx) { text.gsub(/\e\[[0-9;]*m/, "") }   # ANSI strip
+end
+```
+
+`translate` and `speak` are reference transforms shipped with the gem — common doc-dialog use cases (translation, speech) packaged as built-in chain steps. They are optional and lazily soft-load their backends; ignore them if you only want custom callables.
 
 ## Installation
 
@@ -55,17 +60,22 @@ That alone discovers `~/.reline-dialog-transform.rb` (or `./.reline-dialog-trans
 
 ### Dotfile patterns
 
+The dotfile is plain Ruby that calls `Reline::DialogTransform.install!`. Same DSL as in-code use.
+
 **Translate-only** (`~/.reline-dialog-transform.rb`):
 
 ```ruby
-default_lang :ja
-translate
+Reline::DialogTransform.install!(default_lang: :ja) do |t|
+  t.translate
+end
 ```
 
 **Speak-only**:
 
 ```ruby
-speak voice: "ja-JP", rate: 0.5
+Reline::DialogTransform.install! do |t|
+  t.speak voice: "ja-JP", rate: 0.5
+end
 ```
 
 (Speak is gated on `RELINE_SPEAK=1` by default, so you also need `export RELINE_SPEAK=1` in your shell.)
@@ -73,54 +83,51 @@ speak voice: "ja-JP", rate: 0.5
 **Chain — translate then speak the translation**:
 
 ```ruby
-default_lang :ja
-translate
-speak voice: "ja-JP"
+Reline::DialogTransform.install!(default_lang: :ja) do |t|
+  t.translate
+  t.speak voice: "ja-JP"
+end
 ```
 
 **Chain — speak the original English then translate**:
 
 ```ruby
-speak voice: "en-US"           # passthrough; speaks original
-translate target_lang: :ja     # transforms text after speak
+Reline::DialogTransform.install! do |t|
+  t.speak     voice: "en-US"
+  t.translate target_lang: :ja
+end
 ```
 
-The order of method calls in the dotfile is the order of the chain. `speak` always passes the input text through unchanged so it's safe to layer either before or after `translate`.
+The order of method calls inside the block is the order of the chain. `speak` always passes the input text through unchanged so it's safe to layer either before or after `translate`.
 
 ### Custom transform via `use`
 
 ```ruby
-use ->(text, _ctx) { text.gsub(/\e\[[0-9;]*m/, "") }   # ANSI strip
-translate
+Reline::DialogTransform.install! do |t|
+  t.use ->(text, _ctx) { text.gsub(/\e\[[0-9;]*m/, "") }   # ANSI strip
+  t.translate target_lang: :ja
+end
 ```
 
 The transform receives `(text, ctx)` where `ctx` is a Hash with optional `:source`, `:identifier`, `:framework`, `:klass`, `:kind`. Return the transformed (or unchanged) text.
 
 ## Project-local override
 
-Drop a `.reline-dialog-transform.rb` in any working directory to override `~/`:
-
-```
-~/.reline-dialog-transform.rb         # personal default
-~/dev/work-project/.reline-dialog-transform.rb   # this project's override
-```
-
-The two files merge with **OR semantics**: same-class transforms (`translate`, `speak`) get slot-replaced by project; anonymous `use` callables append; `default_lang` is overwritten last-wins. Project-only entries do NOT erase home entries — only `clear!` does that.
+`load!` resolves a single dotfile: project (CWD) wins over home, only one is loaded. To layer a project-specific override on top of your home defaults, `load` the home file explicitly from the project file:
 
 ```ruby
 # ./.reline-dialog-transform.rb
-clear!                          # explicit reset; without this the home file's transforms stay
-translate target_lang: :en      # this project keeps docs in English
+load File.expand_path("~/.reline-dialog-transform.rb")  # picks up your home defaults
+Reline::DialogTransform.install!(default_lang: :en) do |t|
+  t.translate target_lang: :en   # project wants English
+end
 ```
+
+Each `install!` call rebuilds the chain from scratch and re-registers the dialog proc with Reline (last call wins). To completely replace home settings, just don't `load` the home file.
 
 ## API
 
-For programmatic use (no dotfile):
-
 ```ruby
-require "reline/dialog_transform"
-
-ENV["RELINE_DIALOG_TRANSFORM_AUTOLOAD"] = "off"   # (in your test setup, not .irbrc)
 require "reline/dialog_transform"
 
 Reline::DialogTransform.install!(default_lang: :ja) do |t|
@@ -130,9 +137,18 @@ Reline::DialogTransform.install!(default_lang: :ja) do |t|
 end
 ```
 
-The block-arg form is recommended for in-code use because closures over outer state stay readable.
+`install!` builds a `Builder`, yields it to your block, then registers a wrap proc with Reline. Each call creates a fresh `Builder` and overwrites the previous registration; there is no merge.
 
-## Built-in transforms
+Public API:
+
+| Method | Purpose |
+|---|---|
+| `Reline::DialogTransform.install!(dialog: :show_doc, default_lang: nil, &block)` | Build a chain from the block and register it. |
+| `Reline::DialogTransform.load!(paths: nil)` | Find the dotfile (project ≻ home, single match) and `Kernel.load` it. The dotfile is expected to call `install!` itself. Returns the loaded path or nil. |
+
+## Reference transforms
+
+`translate` and `speak` ship with the gem as ready-to-use chain steps. Both lazily require their backend — the gem stays usable without those gems installed; you just can't call those transforms.
 
 ### `translate` parameters
 
@@ -184,7 +200,7 @@ What the script does:
 
 1. Pre-flights `require "apple_sdk_mac"` and `require "translation_mac/locale"`. Both must succeed; otherwise it aborts with copy-pasteable fix-up instructions.
 2. Generates a temporary isolated HOME under `Dir.mktmpdir` and writes two files into it:
-   - `.reline-dialog-transform.rb` — `default_lang :ja` + `translate` (plus `speak voice: "ja-JP"` when `--with-speak` is given)
+   - `.reline-dialog-transform.rb` — calls `Reline::DialogTransform.install!(default_lang: :ja) { |t| t.translate }` (plus `t.speak voice: "ja-JP"` when `--with-speak` is given)
    - `.irbrc` — requires `apple_sdk_mac/irb` and calls `AppleSDKMac::IRB.install!`
 3. Prints copy-pasteable instructions for what to type at the prompt — `Apple::Foundation::URL.app` then **TAB twice**.
 4. Spawns `bundle exec irb` with `HOME=` pointed at the scratch dir (and `RELINE_SPEAK=1` when `--with-speak`). Your real `~/.irbrc` is never touched. There is no "Press Enter to launch" pause — irb starts immediately.
@@ -205,8 +221,9 @@ Run the PTY E2E:
 ```sh
 mkdir -p /tmp/e2e_irb/home
 cat > /tmp/e2e_irb/home/.reline-dialog-transform.rb <<'CONF'
-default_lang :ja
-translate
+Reline::DialogTransform.install!(default_lang: :ja) do |t|
+  t.translate
+end
 CONF
 cat > /tmp/e2e_irb/home/.irbrc <<'IRBRC'
 require "apple_sdk_mac"
@@ -238,14 +255,12 @@ For a manual hands-on verification (no PTY automation), use `quick_start_example
 
 ```
 lib/reline/dialog_transform.rb         # public install! / load!
-lib/reline/dialog_transform/builder.rb # DSL builder, slot replacement
+lib/reline/dialog_transform/builder.rb # array-push DSL wrapper
 lib/reline/dialog_transform/chain.rb   # ordered transform runner
-lib/reline/dialog_transform/loader.rb  # dotfile discovery + DSL eval
+lib/reline/dialog_transform/loader.rb  # dotfile path resolver
 lib/reline/dialog_transform/translate.rb
 lib/reline/dialog_transform/speak.rb
 ```
-
-See `docs/superpowers/specs/2026-05-08-reline-dialog-transform-design.md` for the full design rationale (7 confirmed decisions + 6-phase TDD plan).
 
 ## License
 
