@@ -18,8 +18,35 @@ module Reline
     def self.install!(dialog: :show_doc, default_lang: nil, reline: Reline)
       builder = Builder.new(default_lang: default_lang)
       yield builder if block_given?
-      install_chain(builder.to_chain, dialog: dialog, reline: reline)
+      chain = builder.to_chain
+      @last_install = { chain: chain, dialog: dialog, reline: reline }
+      install_chain(chain, dialog: dialog, reline: reline)
     end
+
+    # Re-applies the most recent install! invocation. Call this after
+    # something else has registered a new dialog proc for the same
+    # `dialog:` so our wrap layers on top of the newly registered proc.
+    #
+    # IRB's RelineInputMethod#initialize registers its own :show_doc
+    # AFTER .irbrc evaluation completes — overwriting any wrap we
+    # installed during .irbrc. The autoload block below prepends that
+    # initialize and calls reinstall! after super so the wrap survives.
+    #
+    # Returns nil and does nothing when install! was never called or
+    # was reset (test seam: reset_last_install!).
+    def self.reinstall!(reline: nil)
+      return nil unless @last_install
+      target_reline = reline || @last_install[:reline]
+      install_chain(@last_install[:chain],
+                    dialog: @last_install[:dialog],
+                    reline: target_reline)
+    end
+
+    # Test seam — clears the cached install! invocation.
+    def self.reset_last_install!
+      @last_install = nil
+    end
+    private_class_method :reset_last_install!
 
     # Discovers a dotfile and runs it via Kernel#load. The dotfile body
     # is plain Ruby and is expected to call Reline::DialogTransform.install!
@@ -73,5 +100,20 @@ if ENV["RELINE_DIALOG_TRANSFORM_AUTOLOAD"] != "off"
     Reline::DialogTransform.load!
   rescue StandardError => e
     warn "[reline-dialog-transform] auto-load failed: #{e.class}: #{e.message}"
+  end
+
+  # IRB::RelineInputMethod#initialize registers its own :show_doc proc
+  # via Reline.add_dialog_proc, AFTER .irbrc has finished. That wipes
+  # any wrap we registered during .irbrc. Prepend a hook that re-applies
+  # the last install! after super so we layer on top of IRB's :show_doc.
+  if defined?(::IRB) && defined?(::IRB::RelineInputMethod)
+    ::IRB::RelineInputMethod.prepend(Module.new do
+      def initialize(...)
+        super
+        Reline::DialogTransform.reinstall!
+      rescue StandardError => e
+        warn "[reline-dialog-transform] post-IRB-init reinstall failed: #{e.class}: #{e.message}"
+      end
+    end)
   end
 end
