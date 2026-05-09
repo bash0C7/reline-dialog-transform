@@ -145,6 +145,36 @@ class TranslateTest < Test::Unit::TestCase
     assert_equal ["Returns the receiver"], fake.calls
   end
 
+  # ---- newline stripping ----
+  #
+  # Apple Translation framework appends a trailing "\n" to every result
+  # (verified at /tmp/translate_probe.rb: "...Returns the receiver
+  # unchanged." → "...Returns the receiver unchanged.\n"). When that
+  # newline lands inside a Reline dialog row, the terminal advances
+  # the cursor mid-render and Reline's internal cursor_y tracking
+  # desyncs — old dialog frames bleed into subsequent renders, the
+  # autocomplete column gets partially overwritten. Translate must
+  # strip newlines from the translator output so each line stays one
+  # dialog row.
+
+  def test_translate_strips_trailing_newline_from_translator_output
+    fake = FakeTranslator.new(stub: { "Hello, world." => "こんにちは、世界。\n" })
+    t = Translate.new(target_lang: :ja, translator: fake)
+    assert_equal "こんにちは、世界。", t.call("Hello, world.", {})
+  end
+
+  def test_translate_strips_embedded_newlines_from_translator_output
+    fake = FakeTranslator.new(stub: { "abc def" => "alpha\nbeta\ngamma" })
+    t = Translate.new(target_lang: :ja, translator: fake)
+    refute_includes t.call("abc def", {}), "\n"
+  end
+
+  def test_translate_strips_carriage_returns_too
+    fake = FakeTranslator.new(stub: { "abc def" => "x\ry\r\nz" })
+    t = Translate.new(target_lang: :ja, translator: fake)
+    refute_includes t.call("abc def", {}), "\r"
+  end
+
   # ---- SKIP_RDOC_NON_PROSE preset ----
   #
   # IRB show_doc dialog content includes mixed line types. Translating
