@@ -30,7 +30,7 @@
 #   HOME=/tmp/e2e_irb/home \
 #   XDG_CACHE_HOME=/Users/you/.cache \
 #   TERM=xterm-256color \
-#   bundle exec ruby ../reline-dialog-transform/examples/e2e_irb_pty.rb \
+#   bundle exec ruby ../reline-dialog-transform/test/e2e_irb_pty.rb \
 #     "Apple::Foundation::URL.app"
 #
 # XDG_CACHE_HOME points at the real apple_sdk_mac KB cache so the

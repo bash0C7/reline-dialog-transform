@@ -158,28 +158,35 @@ The block-arg form is recommended for in-code use because closures over outer st
 | `RELINE_DIALOG_TRANSFORM_DEBUG=1` | warn on Translate / Speak / chain-step exceptions instead of swallowing |
 | `RELINE_SPEAK=1` | default-`enabled` proc returns true so `speak` actually speaks |
 
-## Try it interactively (`examples/quick_start.rb`)
+## Try it: `quick_start_example.rb`
+
+The single canonical example. Lives at the gem root so you can run it the moment you `cd` in:
 
 ```sh
-bundle exec ruby examples/quick_start.rb
+bundle exec ruby quick_start_example.rb
 ```
 
-The script:
+What it does:
 
-1. Generates a temp HOME with `.reline-dialog-transform.rb` and `.irbrc` configured for `default_lang :ja` + `translate`.
-2. Prints what to type at the irb prompt to see translation in action.
-3. Spawns `bundle exec irb` against that temp HOME (your real `~/.irbrc` is never touched).
-4. Cleans up the temp HOME on exit.
+1. Generates a temporary isolated HOME directory under `Dir.mktmpdir` and writes two files into it:
+   - `.reline-dialog-transform.rb` — `default_lang :ja` + `translate` (and a commented-out `speak` line you can uncomment)
+   - `.irbrc` — requires `apple_sdk_mac/irb` (when present) plus `reline/dialog_transform`
+2. Prints copy-pasteable instructions for what to type at the irb prompt to see translation in action — e.g. `Apple::Foundation::URL.app` then TAB twice.
+3. Pauses on `Press Enter to launch irb...` so you have time to read.
+4. Spawns `bundle exec irb` with `HOME=` pointed at the scratch dir. Your real `~/.irbrc` is never touched.
+5. After `exit`, cleans up the scratch dir **file by file** with `File.delete` (no `rm -rf`, ever) and finishes with `Dir.rmdir`. If anything unexpected was left behind, `rmdir` refuses and the directory is preserved with a warning so nothing arbitrary gets wiped.
 
-When run from a bundle that has `apple_sdk_mac` + `translation_mac-locale` path-loaded (e.g. `rb-apple-sdk-mac`), you get the full Apple SDK doc → Japanese demo. When run from this gem's own bundle, the wrap still installs and runs, the `translate` transform just passes through (no translator engine in scope).
+When run from a bundle that has `apple_sdk_mac` + `translation_mac-locale` path-loaded (e.g. the `rb-apple-sdk-mac` development bundle), you get the full Apple SDK doc → Japanese demo. When run from this gem's own bundle, the wrap still installs and runs, the `translate` transform just passes through (no translator engine in scope) — useful for quickly sanity-checking a fresh `bundle install`.
+
+> The other scripts under `test/` (`smoke_translate.rb`, `e2e_irb_pty.rb`) are verification tooling, not user examples. See [TUI verification](#tui-verification-phase-6) below.
 
 ## TUI verification (Phase 6)
 
-Three layers of evidence:
+Three layers of evidence under `test/`:
 
-1. **Unit suite** — `test/rdoc_e2e_test.rb` exercises the wrap-and-thread-contents pipeline deterministically.
-2. **Cross-bundle smoke** — `examples/smoke_translate.rb` runs the full translate pipeline against the real `TranslationMacHelper` when run from a bundle that has `translation_mac-locale` path-loaded.
-3. **Real PTY E2E** — `examples/e2e_irb_pty.rb` spawns an actual `bundle exec irb` under PTY, types a partial Apple SDK identifier, sends TAB twice, and looks for Japanese codepoints in the captured terminal byte stream.
+1. **Unit suite** — `test/rdoc_e2e_test.rb` exercises the wrap-and-thread-contents pipeline deterministically against fake `Reline::DialogRenderInfo` payloads.
+2. **Cross-bundle smoke** — `test/smoke_translate.rb` runs the full translate pipeline against the real `TranslationMacHelper` when invoked from a bundle that has `translation_mac-locale` path-loaded. Not picked up by `rake test` (filename does not end in `_test.rb`); run by hand.
+3. **Real PTY E2E** — `test/e2e_irb_pty.rb` spawns an actual `bundle exec irb` under PTY, types a partial Apple SDK identifier, sends TAB twice, captures the terminal byte stream and reports any Japanese codepoints found.
 
 Run the PTY E2E:
 
@@ -199,7 +206,7 @@ cd ../rb-apple-sdk-mac   # bundle with apple_sdk_mac + reline-dialog-transform +
 HOME=/tmp/e2e_irb/home \
   XDG_CACHE_HOME=$HOME/.cache \
   TERM=xterm-256color \
-  bundle exec ruby ../reline-dialog-transform/examples/e2e_irb_pty.rb \
+  bundle exec ruby ../reline-dialog-transform/test/e2e_irb_pty.rb \
     "Apple::Foundation::URL.app"
 ```
 
@@ -213,7 +220,7 @@ Japanese codepoints: 100+ found, sample: パスコンポーネントをURLに追
 =======================
 ```
 
-For a manual hands-on verification (no PTY automation), the same dotfile setup also works against an interactive `bundle exec irb` — type the partial identifier, press TAB twice, observe the right-side popup in Japanese.
+For a manual hands-on verification (no PTY automation), use `quick_start_example.rb` and TAB twice on the suggested identifier.
 
 ## Architecture
 

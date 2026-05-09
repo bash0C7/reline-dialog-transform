@@ -10,17 +10,17 @@
 # Run from the gem root (this gem's Gemfile has no translation_mac-
 # locale, so the wrap will pass through unchanged):
 #
-#   bundle exec ruby examples/smoke_translate.rb
+#   bundle exec ruby test/smoke_translate.rb
 #
 # Run from a parent gem's bundle that DOES have translation_mac-locale
 # (e.g. rb-apple-sdk-mac) to exercise real translation:
 #
 #   cd ../rb-apple-sdk-mac
-#   bundle exec ruby ../reline-dialog-transform/examples/smoke_translate.rb
+#   bundle exec ruby ../reline-dialog-transform/test/smoke_translate.rb
 #
 # Override target locale via env:
 #
-#   RELINE_DIALOG_TRANSFORM_LANG=ja-JP bundle exec ruby examples/smoke_translate.rb
+#   RELINE_DIALOG_TRANSFORM_LANG=ja-JP bundle exec ruby test/smoke_translate.rb
 
 ENV["RELINE_DIALOG_TRANSFORM_AUTOLOAD"] ||= "off"
 
