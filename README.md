@@ -160,19 +160,20 @@ The block-arg form is recommended for in-code use because closures over outer st
 
 ## Try it: `quick_start_example.rb`
 
-The single canonical example. Lives at the gem root so you can run it the moment you `cd` in.
-
-> **Run it from a bundle that has `apple_sdk_mac` + `translation_mac-locale` path-loaded.** The `rb-apple-sdk-mac` development bundle is the canonical one. The script pre-flights both gems and aborts with copy-pasteable instructions if either is missing — running from this gem's own bundle is intentionally rejected because there's no Apple SDK doc source for the dialog to render.
+The gem's Gemfile path-loads `rb-apple-sdk-mac` (and its sibling deps) from the standard ghq layout, so `cd reline-dialog-transform && bundle install && bundle exec ruby quick_start_example.rb` works end-to-end without changing directories.
 
 ```sh
-cd ../rb-apple-sdk-mac
-bundle exec ruby ../reline-dialog-transform/quick_start_example.rb              # translate-only
-bundle exec ruby ../reline-dialog-transform/quick_start_example.rb --with-speak # also speaks via AVSpeechSynthesizer
+cd reline-dialog-transform
+bundle install                                       # pulls apple_sdk_mac et al via path:
+bundle exec ruby quick_start_example.rb              # translate-only
+bundle exec ruby quick_start_example.rb --with-speak # also speaks via AVSpeechSynthesizer
 ```
 
-What it does:
+> Prerequisites: the standard bash0C7 ghq layout under `~/dev/src/github.com/bash0C7/`. If a sibling repo is missing (`rb-apple-sdk-mac`, `rb-translation-mac`, `rb-foundation-model-mac`, `rb-apple-sdk-knowledge`), `ghq get` it and re-run `bundle install`. The `rb-apple-sdk-mac` checkout must have its native extension built — this happens automatically on its own `bundle install`.
 
-1. Pre-flights `require "apple_sdk_mac"` and `require "translation_mac/locale"`. Both must succeed.
+What the script does:
+
+1. Pre-flights `require "apple_sdk_mac"` and `require "translation_mac/locale"`. Both must succeed; otherwise it aborts with copy-pasteable fix-up instructions.
 2. Generates a temporary isolated HOME under `Dir.mktmpdir` and writes two files into it:
    - `.reline-dialog-transform.rb` — `default_lang :ja` + `translate` (plus `speak voice: "ja-JP"` when `--with-speak` is given)
    - `.irbrc` — requires `apple_sdk_mac/irb` and calls `AppleSDKMac::IRB.install!`
@@ -204,11 +205,11 @@ require "apple_sdk_mac/irb"
 AppleSDKMac::IRB.install!
 IRBRC
 
-cd ../rb-apple-sdk-mac   # bundle with apple_sdk_mac + reline-dialog-transform + translation_mac-locale
+cd reline-dialog-transform   # path-loads apple_sdk_mac + translation_mac-locale via Gemfile
 HOME=/tmp/e2e_irb/home \
   XDG_CACHE_HOME=$HOME/.cache \
   TERM=xterm-256color \
-  bundle exec ruby ../reline-dialog-transform/test/e2e_irb_pty.rb \
+  bundle exec ruby test/e2e_irb_pty.rb \
     "Apple::Foundation::URL.app"
 ```
 
