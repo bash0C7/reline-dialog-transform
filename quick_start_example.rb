@@ -110,34 +110,39 @@ env = {
 }
 env["RELINE_SPEAK"] = "1" if with_speak
 
-system(env, "bundle", "exec", "irb")
-
-# --- cleanup, file-by-file ---
-puts
-puts "[quick-start] cleaning up #{scratch} (per-file rm + rmdir)..."
-
-CONFIG_FILES.each do |name|
-  path = File.join(scratch, name)
-  begin
-    File.delete(path)
-    puts "[quick-start]   removed #{name}"
-  rescue Errno::ENOENT
-    puts "[quick-start]   missing (skip) #{name}"
-  end
-end
-
-IRB_RUNTIME_FILES.each do |name|
-  path = File.join(scratch, name)
-  next unless File.exist?(path)
-  File.delete(path)
-  puts "[quick-start]   removed irb runtime file #{name}"
-end
-
 begin
-  Dir.rmdir(scratch)
-  puts "[quick-start]   rmdir #{scratch}"
-rescue Errno::ENOTEMPTY
-  warn "[quick-start] WARN: #{scratch} not empty after explicit cleanup; leaving in place"
-  warn "[quick-start]       leftover entries: #{Dir.children(scratch).inspect}"
-  warn "[quick-start]       inspect manually before deleting; this script will NOT rm -rf"
+  system(env, "bundle", "exec", "irb")
+rescue Interrupt
+  # Ctrl+C inside the spawned irb propagates SIGINT to the whole
+  # process group, so the parent receives it as Interrupt. We don't
+  # want a stack trace — just fall through to cleanup quietly.
+ensure
+  puts
+  puts "[quick-start] cleaning up #{scratch} (per-file rm + rmdir)..."
+
+  CONFIG_FILES.each do |name|
+    path = File.join(scratch, name)
+    begin
+      File.delete(path)
+      puts "[quick-start]   removed #{name}"
+    rescue Errno::ENOENT
+      puts "[quick-start]   missing (skip) #{name}"
+    end
+  end
+
+  IRB_RUNTIME_FILES.each do |name|
+    path = File.join(scratch, name)
+    next unless File.exist?(path)
+    File.delete(path)
+    puts "[quick-start]   removed irb runtime file #{name}"
+  end
+
+  begin
+    Dir.rmdir(scratch)
+    puts "[quick-start]   rmdir #{scratch}"
+  rescue Errno::ENOTEMPTY
+    warn "[quick-start] WARN: #{scratch} not empty after explicit cleanup; leaving in place"
+    warn "[quick-start]       leftover entries: #{Dir.children(scratch).inspect}"
+    warn "[quick-start]       inspect manually before deleting; this script will NOT rm -rf"
+  end
 end
