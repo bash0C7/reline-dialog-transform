@@ -2,8 +2,6 @@
 
 Compose Reline dialog text transforms — `translate`, `speak`, and arbitrary user callables — applied to whatever appears in a Reline `:show_doc` (or other) dialog.
 
-Built to extract the dialog-text translation pipeline out of [`apple_sdk_mac/irb`](https://github.com/bash0C7/rb-apple-sdk-mac/tree/main/irb), so the same hook can wrap RDoc, Apple SDK doc, or any other dialog source. **Status: pre-1.0 (`v0.0.1` development).**
-
 ## What it does
 
 When you press TAB twice in IRB, Reline pops a doc dialog on the right side of the autocomplete popup. This gem hooks `Reline.add_dialog_proc(:show_doc, ...)` and routes every line of the dialog's `DialogRenderInfo#contents` through an ordered chain of transforms. Two transforms ship in the box:
