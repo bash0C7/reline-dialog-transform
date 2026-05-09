@@ -77,8 +77,15 @@ class InstallTest < Test::Unit::TestCase
   end
 
   def test_install_called_twice_each_call_creates_independent_registration
-    info = make_info(["abc"])
-    fake = FakeReline.new(existing: { show_doc: make_existing(-> { info }) })
+    fresh_info = -> {
+      Reline::DialogRenderInfo.new(
+        pos: Reline::CursorPos.new(0, 0),
+        contents: ["abc"],
+        width: 10,
+        bg_color: "49"
+      )
+    }
+    fake = FakeReline.new(existing: { show_doc: make_existing(fresh_info) })
 
     Reline::DialogTransform.install!(reline: fake) do |t|
       t.use ->(text, _) { text.upcase }

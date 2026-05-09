@@ -39,9 +39,8 @@ module Reline
       existing_proc   = existing_struct ? existing_struct.dialog_proc : nil
 
       wrapped = -> {
-        original = existing_proc ? instance_exec(&existing_proc) : nil
-        return nil if original.nil?
-        info = original.dup
+        info = existing_proc ? instance_exec(&existing_proc) : nil
+        return nil if info.nil?
         ctx = {}
         info.contents = info.contents.map { |line| chain.call(line, ctx) }
         info
