@@ -1,6 +1,6 @@
 # reline-dialog-transform
 
-Compose Reline dialog text transforms — `translate`, `speak`, and arbitrary user callables — applied to whatever appears in a Reline `:show_doc` (or other) dialog.
+Compose Reline dialog text transforms — `translate` and arbitrary user callables — applied to whatever appears in a Reline `:show_doc` (or other) dialog.
 
 ## What it does
 
@@ -14,7 +14,7 @@ Reline::DialogTransform.install! do |t|
 end
 ```
 
-`translate` and `speak` are reference transforms shipped with the gem — common doc-dialog use cases (translation, speech) packaged as built-in chain steps. They are optional and lazily soft-load their backends; ignore them if you only want custom callables.
+`translate` is a reference transform shipped with the gem — a common doc-dialog use case (translation) packaged as a built-in chain step. It's optional and lazily soft-loads its backend; ignore it if you only want custom callables.
 
 ## Installation
 
@@ -24,22 +24,13 @@ gem "reline-dialog-transform",
   git: "https://github.com/bash0C7/reline-dialog-transform"
 ```
 
-`translate` and `speak` lazily require their backends only when the transform is actually instantiated, so add only the deps you want:
+`translate` lazily requires its backend only when the transform is actually instantiated:
 
 ```ruby
 # Optional: enables `t.translate`
 gem "translation_mac-locale",
   git:  "https://github.com/bash0C7/rb-translation-mac",
   glob: "locale/translation_mac-locale.gemspec"
-
-# Optional: enables `t.speak`. rb-apple-sdk-mac's extconf.rb requires
-# `swift_gem/mkmf`, which doesn't resolve from bundler's native-extension
-# build subprocess, so prefer ghq + path: over git: source.
-#
-#   ghq get https://github.com/bash0C7/rb-apple-sdk-mac
-#
-gem "rb-apple-sdk-mac",
-  path: "/path/to/ghq/root/github.com/bash0C7/rb-apple-sdk-mac"
 ```
 
 Then:
@@ -78,35 +69,7 @@ Reline::DialogTransform.install!(default_lang: :ja) do |t|
 end
 ```
 
-**Speak-only**:
-
-```ruby
-Reline::DialogTransform.install! do |t|
-  t.speak voice: "ja-JP", rate: 0.5
-end
-```
-
-(Speak is gated on `RELINE_SPEAK=1` by default, so you also need `export RELINE_SPEAK=1` in your shell.)
-
-**Chain — translate then speak the translation**:
-
-```ruby
-Reline::DialogTransform.install!(default_lang: :ja) do |t|
-  t.translate
-  t.speak voice: "ja-JP"
-end
-```
-
-**Chain — speak the original English then translate**:
-
-```ruby
-Reline::DialogTransform.install! do |t|
-  t.speak     voice: "en-US"
-  t.translate target_lang: :ja
-end
-```
-
-The order of method calls inside the block is the order of the chain. `speak` always passes the input text through unchanged so it's safe to layer either before or after `translate`.
+The order of method calls inside the block is the order of the chain.
 
 ### Custom transform via `use`
 
@@ -143,7 +106,6 @@ require "reline/dialog_transform"
 Reline::DialogTransform.install!(default_lang: :ja) do |t|
   t.translate
   t.use ->(text, _ctx) { text.tr("\n", " ") }
-  t.speak voice: "ja-JP" if ENV["RELINE_SPEAK"] == "1"
 end
 ```
 
@@ -159,7 +121,7 @@ Public API:
 
 ## Reference transforms
 
-`translate` and `speak` ship with the gem as ready-to-use chain steps. Both lazily require their backend — the gem stays usable without those gems installed; you just can't call those transforms.
+`translate` ships with the gem as a ready-to-use chain step. It lazily requires its backend — the gem stays usable without `translation_mac-locale` installed; you just can't call `t.translate`.
 
 ### `translate` parameters
 
@@ -174,20 +136,6 @@ Public API:
 
 `translate` strips CR/LF from the translator output before returning. Apple Translation framework appends `\n` to every result, and an embedded newline inside dialog content desyncs Reline's renderer (mid-row cursor advance → wrong y-position for subsequent rows → residue across candidate navigation).
 
-### `speak` parameters
-
-| Key | Default | Description |
-|-----|---------|-------------|
-| `voice:` | builder `default_lang` | BCP-47 voice locale, e.g. `"ja-JP"` |
-| `rate:` | `0.5` | speech rate, 0.0–1.0 |
-| `pitch:` | `1.0` | pitch multiplier, 0.5–2.0 |
-| `volume:` | `1.0` | 0.0–1.0 |
-| `truncate_to:` | `200` | max chars actually spoken (text passthrough is unaffected) |
-| `interrupt:` | `true` | stop the previous utterance before speaking |
-| `async:` | `true` | use AVF's async dispatch (rarely overridden) |
-| `enabled:` | `-> { ENV["RELINE_SPEAK"] == "1" }` | runtime gate — speech is opt-in by default |
-| `speech_proc:` | nil | inject a callable for tests / non-Mac |
-
 ## Auto-load and ENV vars
 
 `require "reline/dialog_transform"` triggers two things at load time (both gated by `RELINE_DIALOG_TRANSFORM_AUTOLOAD`):
@@ -198,18 +146,16 @@ Public API:
 | ENV var | Effect |
 |---------|--------|
 | `RELINE_DIALOG_TRANSFORM_AUTOLOAD=off` | suppress both the dotfile discovery and the IRB prepend |
-| `RELINE_DIALOG_TRANSFORM_DEBUG=1` | warn on Translate / Speak / chain-step exceptions instead of swallowing |
-| `RELINE_SPEAK=1` | default-`enabled` proc returns true so `speak` actually speaks |
+| `RELINE_DIALOG_TRANSFORM_DEBUG=1` | warn on Translate / chain-step exceptions instead of swallowing |
 
 ## Try it: `quick_start_example.rb`
 
-The gem's Gemfile path-loads `translation_mac-locale` (the sibling repo `rb-translation-mac/locale`) so `t.translate` actually translates. No `apple_sdk_mac` is involved — the demo drives IRB's stdlib RDoc dialog, which the wrap layers on top of automatically.
+The gem's Gemfile path-loads `translation_mac-locale` (the sibling repo `rb-translation-mac/locale`) so `t.translate` actually translates. The demo drives IRB's stdlib RDoc dialog, which the wrap layers on top of automatically.
 
 ```sh
 cd reline-dialog-transform
 bundle install                                       # pulls translation_mac-locale via path:
-bundle exec ruby quick_start_example.rb              # translate-only
-bundle exec ruby quick_start_example.rb --with-speak # also speaks via AVSpeechSynthesizer
+bundle exec ruby quick_start_example.rb              # translate demo
 ```
 
 > Prerequisites: the standard bash0C7 ghq layout under `~/dev/src/github.com/bash0C7/`. If `rb-translation-mac` is missing, `ghq get https://github.com/bash0C7/rb-translation-mac` and re-run `bundle install`.
@@ -218,10 +164,10 @@ What the script does:
 
 1. Pre-flights `require "translation_mac/locale"`. Must succeed; otherwise it aborts with copy-pasteable fix-up instructions.
 2. Generates a temporary isolated HOME under `Dir.mktmpdir` and writes two files into it:
-   - `.reline-dialog-transform.rb` — calls `Reline::DialogTransform.install!(default_lang: :ja) { |t| t.translate skip_if: Reline::DialogTransform::Translate::SKIP_RDOC_NON_PROSE }` (plus `t.speak voice: "ja-JP"` when `--with-speak` is given)
+   - `.reline-dialog-transform.rb` — calls `Reline::DialogTransform.install!(default_lang: :ja) { |t| t.translate skip_if: Reline::DialogTransform::Translate::SKIP_RDOC_NON_PROSE }`
    - `.irbrc` — single line: `require "reline/dialog_transform"`. Auto-load discovers the dotfile, runs it, and the IRB prepend hook layers the wrap on top of IRB's `:show_doc` after `RelineInputMethod#initialize`.
 3. Prints copy-pasteable instructions: type `"hello".ups` at the prompt, then **TAB once**. IRB's autocomplete shows `upcase` / `upcase!` candidates; the doc preview that appears on the side renders in Japanese (translated by `translation_mac-locale`).
-4. Spawns `bundle exec irb` with `HOME=` pointed at the scratch dir (and `RELINE_SPEAK=1` when `--with-speak`). Your real `~/.irbrc` is never touched.
+4. Spawns `bundle exec irb` with `HOME=` pointed at the scratch dir. Your real `~/.irbrc` is never touched.
 5. After `exit`, cleans up the scratch dir **file by file** with `File.delete` (no `rm -rf`, ever) and finishes with `Dir.rmdir`. If anything unexpected was left behind, `rmdir` refuses and the directory is preserved with a warning.
 
 > The scripts under `test/` (`smoke_translate.rb`, `e2e_irb_pty.rb`) are verification tooling, not user examples. See [TUI verification](#tui-verification) below.
@@ -261,7 +207,6 @@ lib/reline/dialog_transform/builder.rb # array-push DSL wrapper
 lib/reline/dialog_transform/chain.rb   # ordered transform runner
 lib/reline/dialog_transform/loader.rb  # dotfile path resolver
 lib/reline/dialog_transform/translate.rb
-lib/reline/dialog_transform/speak.rb
 ```
 
 ## License

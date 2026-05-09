@@ -88,12 +88,11 @@ class RDocE2ETest < Test::Unit::TestCase
     ], result.contents
   end
 
-  def test_dotfile_can_chain_translate_then_passthrough_speak
+  def test_dotfile_can_chain_anonymous_transform
     # Translate uses an injected fake translator so we don't depend
     # on translation_mac-locale being installable in this test env.
     # The dotfile registers an anonymous transform that shapes the
-    # input, simulating Translate's per-line rewrite, plus a Speak-
-    # like passthrough that records the line it would have spoken.
+    # input, simulating Translate's per-line rewrite.
     rdoc_info = make_info(["String#upcase", "Returns a copy of str."])
     existing = make_existing(-> { rdoc_info })
     fake = FakeReline.new(existing: { show_doc: existing })

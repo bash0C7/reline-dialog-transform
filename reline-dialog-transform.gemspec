@@ -8,12 +8,11 @@ Gem::Specification.new do |spec|
   spec.authors = ["bash0C7"]
   spec.email = ["ksb.4038.nullpointer+github@gmail.com"]
 
-  spec.summary = "Compose Reline dialog text transforms (translate, speak, custom callables)"
+  spec.summary = "Compose Reline dialog text transforms (translate, custom callables)"
   spec.description = <<~DESC
     Hooks Reline.add_dialog_proc and applies an ordered chain of text
-    transforms to the dialog contents. Built-in transforms cover
-    translation (via translation_mac-locale) and speech synthesis (via
-    apple_sdk_mac AVFoundation bridge). Configured via a Ruby DSL in a
+    transforms to the dialog contents. The built-in translate transform
+    delegates to translation_mac-locale. Configured via a Ruby DSL in a
     dotfile at the project or home root.
   DESC
   spec.homepage = "https://github.com/bash0C7/reline-dialog-transform"

@@ -7,7 +7,7 @@ require "reline/dialog_transform/chain"
 # Chain runs transforms in order, each receiving (text, ctx) and
 # returning text passed to the next. error_isolation default true
 # means a raising transform falls through (input passes unchanged
-# to the next), so a single broken Speak doesn't kill the dialog.
+# to the next), so a single broken transform doesn't kill the dialog.
 class ChainTest < Test::Unit::TestCase
   Chain = Reline::DialogTransform::Chain
 

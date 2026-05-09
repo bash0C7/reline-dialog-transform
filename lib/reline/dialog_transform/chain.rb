@@ -5,8 +5,8 @@ module Reline
     # Holds the ordered list of transforms produced by Builder#to_chain
     # and runs them in sequence over (text, ctx). With the default
     # error_isolation = true, a transform that raises is treated as a
-    # no-op so a single broken Speak / Translate doesn't kill the dialog
-    # for unrelated downstream transforms or future invocations.
+    # no-op so a single broken transform doesn't kill the dialog for
+    # unrelated downstream transforms or future invocations.
     class Chain
       attr_reader :transforms
 
