@@ -79,6 +79,13 @@ class BuilderTest < Test::Unit::TestCase
     assert_nil b.to_chain.transforms.first.target_lang
   end
 
+  def test_no_default_lang_speak_voice_stays_nil
+    b = Builder.new
+    b.speak
+
+    assert_nil b.to_chain.transforms.first.voice
+  end
+
   def test_translate_then_speak_preserves_call_order
     b = Builder.new
     b.translate target_lang: :ja
