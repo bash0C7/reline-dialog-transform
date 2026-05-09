@@ -76,6 +76,26 @@ class InstallTest < Test::Unit::TestCase
     assert_kind_of Reline::DialogTransform::Builder, seen
   end
 
+  def test_install_called_twice_each_call_creates_independent_registration
+    info = make_info(["abc"])
+    fake = FakeReline.new(existing: { show_doc: make_existing(-> { info }) })
+
+    Reline::DialogTransform.install!(reline: fake) do |t|
+      t.use ->(text, _) { text.upcase }
+    end
+    Reline::DialogTransform.install!(reline: fake) do |t|
+      t.use ->(text, _) { text.reverse }
+    end
+
+    assert_equal 2, fake.captured_calls.size
+
+    first_wrapped = fake.captured_calls[0][1]
+    assert_equal ["ABC"], first_wrapped.call.contents
+
+    second_wrapped = fake.captured_calls[1][1]
+    assert_equal ["cba"], second_wrapped.call.contents
+  end
+
   def test_default_lang_propagates_into_builder_for_translate_call
     fake = FakeReline.new
     captured_lang = nil
