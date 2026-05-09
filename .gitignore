@@ -12,3 +12,5 @@ Gemfile.lock
 /tmp/
 
 .claude/scheduled_tasks.lock
+
+/docs/superpowers/
