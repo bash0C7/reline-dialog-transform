@@ -13,23 +13,34 @@ Anything callable can be added to the chain via `use ->(text, ctx) { ... }`.
 
 ## Installation
 
-Gemfile:
+```ruby
+# Gemfile
+gem "reline-dialog-transform",
+  git: "https://github.com/bash0C7/reline-dialog-transform"
+```
+
+`translate` and `speak` reach for `translation_mac-locale` and `apple_sdk_mac` lazily — only when the transform is actually instantiated. Add the deps you want:
 
 ```ruby
-gem "reline-dialog-transform"
+# Optional: enables `t.translate`
+gem "translation_mac-locale",
+  git:  "https://github.com/bash0C7/rb-translation-mac",
+  glob: "locale/translation_mac-locale.gemspec"
+
+# Optional: enables `t.speak`. rb-apple-sdk-mac's extconf.rb requires
+# `swift_gem/mkmf`, which is not resolvable from bundler's native-extension
+# build subprocess, so install via ghq + path: rather than git: source.
+#
+#   ghq get https://github.com/bash0C7/rb-apple-sdk-mac
+#
+gem "rb-apple-sdk-mac",
+  path: "/path/to/ghq/root/github.com/bash0C7/rb-apple-sdk-mac"
 ```
 
 Then:
 
 ```sh
 bundle install
-```
-
-The `translation_mac-locale` and `apple_sdk_mac` deps are NOT pulled in automatically — only required when you actually instantiate the corresponding transform. Add them yourself if you want translation / speech:
-
-```ruby
-gem "translation_mac-locale"   # required for `translate`
-gem "apple_sdk_mac"            # required for `speak`
 ```
 
 ## Quick start
